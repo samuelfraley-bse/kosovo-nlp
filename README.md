@@ -1,149 +1,128 @@
-# Kosovo NLP — EU Progress Report Scoring
+# Kosovo NLP
 
-Dictionary-based criticism scoring of EU Enlargement Progress Reports for Western Balkans countries. Follows the EPU methodology (Baker, Bloom & Davis 2016): keyword hits normalized per 1,000 words.
+Dictionary-based NLP workflow for analysing criticism in EU Progress Reports, centered on [`notebooks/final_pipeline.ipynb`](/c:/Users/sffra/Downloads/BSE%202025-2026/kosovo_nlp/notebooks/final_pipeline.ipynb).
 
----
+The repository builds a paragraph-level corpus from scraped EU reports, scores each paragraph with a custom criticism dictionary, aggregates results to the country-year level, tags policy topics, and runs the final regression/visual analysis in the notebook.
 
-## Directory layout
+## Main entry point
 
-```
-kosovo-nlp/
-│
-├── dictionary.py          # Vocabulary lists + dict_score() function
-├── corpus.py              # Paragraph extraction & standardization
-├── score.py               # Paragraph scoring + country-year aggregation
-├── pipeline.py            # CLI end-to-end runner
-├── pipeline.ipynb         # Interactive notebook demo
-│
-├── scraped/
-│   └── raw/               # {country}_{year}_raw.txt  (PDF → text, one per report)
-│
-├── data/                  # Generated outputs (git-ignored)
-│   ├── paragraphs.csv     # Paragraph corpus (29K+ rows)
-│   ├── scores.csv         # Paragraph-level scores
-│   └── summary.csv        # Country-year aggregated scores
-│
-├── eu_reports/            # PDF scraping utilities
-│   ├── scrape_raw.py      # PDF → raw .txt  (uses PyMuPDF)
-│   ├── scrape_eu.py       # Extract sections 1.1/1.2 from PDFs
-│   └── scrape_anchors.py  # Sentence-level topic segmentation
-│
-└── preprocess.py          # DEPRECATED — page-level scoring (use corpus.py + score.py)
-```
+The project is now organized around [`notebooks/final_pipeline.ipynb`](/c:/Users/sffra/Downloads/BSE%202025-2026/kosovo_nlp/notebooks/final_pipeline.ipynb).
 
----
+That notebook is the end-to-end research workflow:
 
-## Pipeline
+1. Builds the paragraph corpus from raw text files in `scraped/raw/`
+2. Scores paragraphs using the hard/soft criticism dictionaries
+3. Aggregates results to country-year level
+4. Tags paragraphs by policy topic
+5. Runs the final regression specification
+6. Produces the main maps and figures used for interpretation
 
-```
-PDF files
-   │
-   ▼  eu_reports/scrape_raw.py
-scraped/raw/{country}_{year}_raw.txt
-   │
-   ▼  corpus.py  build_corpus()
-data/paragraphs.csv       country | year | paragraph_id | paragraph_text | word_count
-   │
-   ▼  score.py  score_corpus()
-data/scores.csv           + criticism_hard_p1k | criticism_soft_p1k | severity_ratio
-   │
-   ▼  score.py  aggregate_country_year()
-data/summary.csv          country | year | *_uw | *_ww  (unweighted + word-weighted)
+If you only open one file in this repo, open [`notebooks/final_pipeline.ipynb`](/c:/Users/sffra/Downloads/BSE%202025-2026/kosovo_nlp/notebooks/final_pipeline.ipynb).
+
+## Current repository structure
+
+```text
+kosovo_nlp/
+|-- notebooks/
+|   |-- final_pipeline.ipynb      # Main analysis notebook
+|   `-- adhoc/                    # Older exploratory or scratch notebooks
+|
+|-- src/
+|   |-- corpus.py                 # Build paragraph corpus from raw report text
+|   |-- dictionary.py             # Custom lexicon and dictionary scoring helpers
+|   |-- pipeline.py               # Script wrapper for corpus -> score -> summary
+|   |-- preprocess.py             # Older preprocessing utilities
+|   |-- score.py                  # Paragraph scoring, topic tagging, aggregation
+|   |-- scrape.py                 # Scraping-related helper script
+|   `-- scrape_un.py              # UN scraping-related helper script
+|
+|-- data/
+|   |-- paragraphs.csv            # Paragraph-level corpus output
+|   |-- scores.csv                # Paragraph-level scoring output
+|   `-- summary.csv               # Country-year summary output
+|
+|-- scraped/                      # Raw scraped text inputs
+|-- eu_reports/                   # EU report scraping and earlier report-analysis utilities
+|-- main.py                       # Minimal project entry script
+|-- pyproject.toml                # Project metadata and dependencies
+|-- uv.lock                       # Locked dependency set
+`-- README.md
 ```
 
----
+## Workflow
 
-## Quickstart
+### Notebook-first workflow
+
+The intended workflow is:
+
+1. Open [`notebooks/final_pipeline.ipynb`](/c:/Users/sffra/Downloads/BSE%202025-2026/kosovo_nlp/notebooks/final_pipeline.ipynb)
+2. Run the notebook top to bottom
+3. Use the generated `df`, scored data, aggregated tables, regression outputs, and plots directly in the notebook
+
+The notebook already includes repo-root detection so it can find `src/` even if the kernel starts from the `notebooks/` directory.
+
+### Script workflow
+
+If you want to reproduce the intermediate CSVs outside the notebook, the core script is [`src/pipeline.py`](/c:/Users/sffra/Downloads/BSE%202025-2026/kosovo_nlp/src/pipeline.py).
 
 ```bash
-# 1. Extract paragraphs from all raw reports
-python corpus.py
-
-# 2. Score paragraphs and aggregate
-python score.py
-
-# 3. Or run both steps at once
-python pipeline.py
+python src/pipeline.py
 ```
 
-Or open `pipeline.ipynb` to run the full pipeline interactively with plots.
+This runs:
 
----
+1. [`src/corpus.py`](/c:/Users/sffra/Downloads/BSE%202025-2026/kosovo_nlp/src/corpus.py) to create `data/paragraphs.csv`
+2. [`src/score.py`](/c:/Users/sffra/Downloads/BSE%202025-2026/kosovo_nlp/src/score.py) to create `data/scores.csv`
+3. Aggregation to create `data/summary.csv`
 
-## Module reference
+You can also run stages individually:
 
-### `dictionary.py`
-Defines four vocabulary lists and the core scoring function.
-
-- `CRITICISM_HARD` — explicit failure/regression language ("failed", "backsliding", "violation")
-- `CRITICISM_SOFT` — hedged concern language ("concern", "challenge", "delayed")
-- `REFORM_HARD` — confirmed completed achievements ("adopted", "implemented", "established")
-- `REFORM_SOFT` — effort/intent without delivery ("progress", "improving", "working towards")
-- `TOPICS` — topic-keyed vocabulary sets: `judiciary`, `corruption`, `governance`, `economy`
-- `dict_score(text, term_list)` → `(raw_count, per_1000_words)`
-
-### `corpus.py`
-Turns raw `.txt` files into a standardized paragraph DataFrame.
-
-- `build_corpus(raw_dir, min_words=50, max_words=500)` → DataFrame
-- `extract_paragraphs(text)` — handles two PDF extraction formats via dual boundary signals
-- `split_long(text, max_words)` — splits oversized paragraphs at sentence boundaries
-
-### `score.py`
-Scores a paragraph DataFrame and aggregates to country-year level.
-
-- `score_corpus(df)` → df with `criticism_hard_p1k`, `criticism_soft_p1k`, `severity_ratio`
-- `aggregate_country_year(df_scored)` → country-year summary with `_uw` (unweighted) and `_ww` (word-weighted) columns
-
-### `pipeline.py`
-End-to-end CLI runner chaining `build_corpus → score_corpus → aggregate_country_year`.
-
-```
-python pipeline.py --raw-dir scraped/raw \
-                   --paragraphs data/paragraphs.csv \
-                   --scores data/scores.csv \
-                   --summary data/summary.csv
+```bash
+python src/corpus.py
+python src/score.py
+python src/pipeline.py
 ```
 
----
+## Core modules
 
-## Data schema
+[`src/corpus.py`](/c:/Users/sffra/Downloads/BSE%202025-2026/kosovo_nlp/src/corpus.py)
+Builds the paragraph-level corpus from `*_raw.txt` files. It removes page markers, detects paragraph boundaries, filters out short fragments, and splits very long paragraphs.
 
-### `paragraphs.csv`
-| Column | Type | Description |
-|---|---|---|
-| `country` | str | Country name (title case) |
-| `year` | int | Report year |
-| `paragraph_id` | int | Per-document paragraph index |
-| `paragraph_text` | str | Cleaned paragraph text |
-| `word_count` | int | Word count (50–500 after standardization) |
+[`src/dictionary.py`](/c:/Users/sffra/Downloads/BSE%202025-2026/kosovo_nlp/src/dictionary.py)
+Defines the criticism dictionaries and scoring helpers used throughout the project.
 
-### `scores.csv`
-All columns from `paragraphs.csv` plus:
+[`src/score.py`](/c:/Users/sffra/Downloads/BSE%202025-2026/kosovo_nlp/src/score.py)
+Applies dictionary scoring, computes `criticism_hard_p1k`, `criticism_soft_p1k`, and `severity_ratio`, tags topic areas, and aggregates to the country-year level.
 
-| Column | Type | Description |
-|---|---|---|
-| `criticism_hard_p1k` | float | Hard criticism hits per 1,000 words |
-| `criticism_soft_p1k` | float | Soft criticism hits per 1,000 words |
-| `severity_ratio` | float | `hard_p1k / soft_p1k`  (NaN when soft = 0) |
+[`src/pipeline.py`](/c:/Users/sffra/Downloads/BSE%202025-2026/kosovo_nlp/src/pipeline.py)
+Convenience wrapper that runs the corpus and scoring pipeline end to end and saves the intermediate CSV outputs.
 
-### `summary.csv`
-| Column | Description |
-|---|---|
-| `country`, `year` | Aggregation keys |
-| `criticism_hard_p1k_uw` | Unweighted mean hard criticism across paragraphs |
-| `criticism_hard_p1k_ww` | Word-count weighted mean hard criticism |
-| `criticism_soft_p1k_uw/ww` | Same for soft criticism |
-| `severity_ratio_uw/ww` | Same for severity ratio |
+## Data outputs
 
----
+[`data/paragraphs.csv`](/c:/Users/sffra/Downloads/BSE%202025-2026/kosovo_nlp/data/paragraphs.csv)
+Paragraph-level corpus with:
+`country`, `year`, `paragraph_id`, `paragraph_text`, `word_count`
 
-## Dictionary methodology
+[`data/scores.csv`](/c:/Users/sffra/Downloads/BSE%202025-2026/kosovo_nlp/data/scores.csv)
+Paragraph-level scored output with the corpus columns plus:
+`criticism_hard_p1k`, `criticism_soft_p1k`, `severity_ratio`
 
-Scores follow the EPU framework: for each paragraph, count substring hits (lowercased) from each vocabulary list, normalize by word count × 1,000.
+[`data/summary.csv`](/c:/Users/sffra/Downloads/BSE%202025-2026/kosovo_nlp/data/summary.csv)
+Country-year aggregated output used in the later notebook steps.
 
-**Hard criticism** (`criticism_hard_p1k`): EU is explicitly condemning failure or regression. Rare but high-signal (e.g. "backsliding", "violation", "state capture").
+## Other notebooks
 
-**Soft criticism** (`criticism_soft_p1k`): EU is flagging concern or noting challenges — hedged, not condemning. Common in all reports (e.g. "concern", "challenge", "limited progress").
+[`notebooks/adhoc/`](/c:/Users/sffra/Downloads/BSE%202025-2026/kosovo_nlp/notebooks/adhoc)
+Contains earlier exploratory notebooks such as raw-text EDA, EU EDA, and prior pipeline experiments. These are supporting materials, not the main workflow.
 
-**Severity ratio** (`severity_ratio = hard / soft`): A high ratio means the EU is explicitly condemning rather than just flagging. Undefined (NaN) when soft = 0.
+## Setup
+
+The project uses Python 3.12+ and is configured in [`pyproject.toml`](/c:/Users/sffra/Downloads/BSE%202025-2026/kosovo_nlp/pyproject.toml).
+
+If you are using `uv`:
+
+```bash
+uv sync
+```
+
+Or with standard Python tooling, install the dependencies listed in [`pyproject.toml`](/c:/Users/sffra/Downloads/BSE%202025-2026/kosovo_nlp/pyproject.toml) and then launch Jupyter to run the main notebook.
