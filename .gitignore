@@ -1,10 +1,31 @@
-# Python-generated files
+# --- Python Environment ---
+.venv/
 __pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
+*.pyc
+.python-version
+uv.lock
 
-# Virtual environments
-.venv
+# --- Raw Data (DO NOT PUSH) ---
+# These are large and make the repo messy
+*.pdf
+*.PDF
+eu_reports/*.pdf
+eu_reports/*.PDF
+scraped/
+eu_reports/corpus_processed/
+
+# --- Documentation Noise ---
+# Keep your README, but ignore temp word docs or system files
+*.docx
+.DS_Store
+Thumbs.db
+
+# --- CSV Data Management ---
+# Ignore the massive intermediate corpus (too big for GitHub)
+enlargement_corpus.csv
+EU_corpus_preprocessed.txt
+
+# KEEP the final analytical results for your EDA and Thesis
+# The '!' means "Do not ignore this specific file"
+!eu_reports/country_year_analysis.csv
+!EU_corpus_scores.csv
