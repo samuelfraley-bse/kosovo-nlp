@@ -9,6 +9,7 @@ dependencies = [
     "fitz>=0.0.1.dev2",
     "frontend>=0.0.3",
     "gensim>=4.4.0",
+    "ipywidgets>=8.1.8",
     "matplotlib>=3.10.8",
     "nltk>=3.9.4",
     "pandas>=3.0.1",
